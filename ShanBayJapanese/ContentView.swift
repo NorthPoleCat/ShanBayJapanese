@@ -37,7 +37,11 @@ struct ContentView: View {
                     ContentUnavailableView.search(text: searchText)
                 } else {
                     List(words) { item in
-                        VocabularyRow(item: item)
+                        NavigationLink {
+                            VocabularyDetailView(item: item, repository: repository)
+                        } label: {
+                            VocabularyRow(item: item)
+                        }
                     }
                     .listStyle(.plain)
                 }
@@ -73,6 +77,116 @@ struct ContentView: View {
             errorMessage = nil
         } catch {
             words = []
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+private struct VocabularyDetailView: View {
+    let item: VocabularyItem
+    let repository: VocabularyRepository?
+
+    @State private var senses: [VocabularySense] = []
+    @State private var examples: [VocabularyExample] = []
+    @State private var errorMessage: String?
+
+    var body: some View {
+        List {
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(item.word)
+                        .font(.largeTitle.bold())
+                    if !item.reading.isEmpty && item.reading != item.word {
+                        Text(item.reading)
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                    }
+                    HStack(spacing: 10) {
+                        Text("JLPT N\(item.level)")
+                        if !item.partOfSpeech.isEmpty {
+                            Text(item.partOfSpeech)
+                        }
+                        if item.isCommon {
+                            Label("常用", systemImage: "star.fill")
+                        }
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 6)
+            }
+
+            Section("释义") {
+                if senses.isEmpty {
+                    Text("暂无释义")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(senses) { sense in
+                        VStack(alignment: .leading, spacing: 5) {
+                            HStack(alignment: .firstTextBaseline) {
+                                Text("\(sense.index + 1).")
+                                    .foregroundStyle(.secondary)
+                                Text(sense.meaningChinese.isEmpty ? sense.meaningEnglish : sense.meaningChinese)
+                            }
+                            if !sense.meaningChinese.isEmpty && !sense.meaningEnglish.isEmpty {
+                                Text(sense.meaningEnglish)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            if !sense.partOfSpeech.isEmpty && sense.partOfSpeech != item.partOfSpeech {
+                                Text(sense.partOfSpeech)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 3)
+                    }
+                }
+            }
+
+            Section("例句") {
+                if examples.isEmpty {
+                    Text("这个词目前没有收录例句")
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(examples) { example in
+                        VStack(alignment: .leading, spacing: 7) {
+                            Text(example.sentenceJapanese)
+                                .font(.body)
+                            if !example.sentenceChinese.isEmpty {
+                                Text(example.sentenceChinese)
+                                    .foregroundStyle(.secondary)
+                            }
+                            if !example.sentenceEnglish.isEmpty {
+                                Text(example.sentenceEnglish)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+            }
+
+            if let errorMessage {
+                Section {
+                    Label(errorMessage, systemImage: "exclamationmark.triangle")
+                        .foregroundStyle(.red)
+                }
+            }
+        }
+        .navigationTitle(item.word)
+        .navigationBarTitleDisplayMode(.inline)
+        .task { loadDetails() }
+    }
+
+    private func loadDetails() {
+        guard let repository else { return }
+        do {
+            senses = try repository.senses(for: item.id)
+            examples = try repository.examples(for: item.id)
+            errorMessage = nil
+        } catch {
             errorMessage = error.localizedDescription
         }
     }

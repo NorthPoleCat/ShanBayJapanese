@@ -11,6 +11,21 @@ struct VocabularyItem: Identifiable, Hashable {
     let meanings: String
 }
 
+struct VocabularySense: Identifiable {
+    let id: Int64
+    let index: Int
+    let meaningChinese: String
+    let meaningEnglish: String
+    let partOfSpeech: String
+}
+
+struct VocabularyExample: Identifiable {
+    let id: Int64
+    let sentenceJapanese: String
+    let sentenceChinese: String
+    let sentenceEnglish: String
+}
+
 enum VocabularyDatabaseError: LocalizedError {
     case resourceMissing
     case openFailed(String)
@@ -127,6 +142,61 @@ final class VocabularyRepository {
             throw VocabularyDatabaseError.queryFailed(lastError)
         }
         return items
+    }
+
+    func senses(for vocabularyID: Int64) throws -> [VocabularySense] {
+        let sql = """
+        SELECT id, jmdict_sense_index,
+               COALESCE(meaning_zh, ''), COALESCE(meaning_en, ''),
+               COALESCE(pos_zh, pos_group, '')
+        FROM senses
+        WHERE vocabulary_id = ?1
+        ORDER BY jmdict_sense_index
+        """
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw VocabularyDatabaseError.queryFailed(lastError)
+        }
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_int64(statement, 1, vocabularyID)
+
+        var result: [VocabularySense] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            result.append(VocabularySense(
+                id: sqlite3_column_int64(statement, 0),
+                index: Int(sqlite3_column_int(statement, 1)),
+                meaningChinese: string(at: 2, in: statement),
+                meaningEnglish: string(at: 3, in: statement),
+                partOfSpeech: string(at: 4, in: statement)
+            ))
+        }
+        return result
+    }
+
+    func examples(for vocabularyID: Int64) throws -> [VocabularyExample] {
+        let sql = """
+        SELECT id, sentence_ja, COALESCE(sentence_zh, ''), COALESCE(sentence_en, '')
+        FROM examples
+        WHERE vocabulary_id = ?1
+        ORDER BY id
+        """
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw VocabularyDatabaseError.queryFailed(lastError)
+        }
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_int64(statement, 1, vocabularyID)
+
+        var result: [VocabularyExample] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            result.append(VocabularyExample(
+                id: sqlite3_column_int64(statement, 0),
+                sentenceJapanese: string(at: 1, in: statement),
+                sentenceChinese: string(at: 2, in: statement),
+                sentenceEnglish: string(at: 3, in: statement)
+            ))
+        }
+        return result
     }
 
     private var lastError: String {
