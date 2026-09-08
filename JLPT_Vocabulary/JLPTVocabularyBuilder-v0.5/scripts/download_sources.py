@@ -5,7 +5,7 @@ import argparse, shutil
 
 ROOT = Path(__file__).resolve().parents[1]
 OPENJLPT_BASE = "https://raw.githubusercontent.com/evanclan/OpenJLPT/main/data/json/vocab"
-JMDICT_URL = "https://ftp.edrdg.org/pub/Nihongo/JMdict_e.gz"
+JMDICT_URL = "https://www.edrdg.org/pub/Nihongo/JMdict_e.gz"
 
 def download(url: str, dst: Path):
     dst.parent.mkdir(parents=True, exist_ok=True)
