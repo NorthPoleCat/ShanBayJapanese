@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from pathlib import Path
 from datetime import datetime, timezone
-import argparse, csv, json, sqlite3
+import argparse, csv, json, re, sqlite3
 
 ROOT=Path(__file__).resolve().parents[1]
 
@@ -13,6 +13,15 @@ def load_sense_zh(path):
         for r in csv.DictReader(f):
             result[(str(r["source_seq"]),int(r["sense_index"]))]=r
     return result
+
+def extract_meaning_keywords(meanings):
+    parts = re.split(r"[；，、,/（）()：:\s]+", "；".join(meanings))
+    seen = []
+    for part in parts:
+        value = part.strip()
+        if 1 <= len(value) <= 12 and value not in seen:
+            seen.append(value)
+    return "|".join(seen[:12])
 
 def main():
     p=argparse.ArgumentParser()
@@ -65,6 +74,7 @@ def main():
         con.execute("INSERT INTO word_list_items(word_list_id,vocabulary_id,sort_order) VALUES(?,?,?)",
                     (list_ids[lvl],vid,row.get("source_seq")))
 
+        row_meanings_zh = []
         for s in row.get("senses",[]):
             idx=int(s.get("sense_index",0))
             zrow=zh.get((str(row.get("source_seq")),idx),{})
@@ -73,6 +83,8 @@ def main():
             review=zrow.get("review_status") or s.get("review_status") or "pending"
             source=zrow.get("translation_source") or None
             note=zrow.get("translation_note") or None
+            if meaning_zh:
+                row_meanings_zh.append(meaning_zh)
 
             scur=con.execute("""
               INSERT INTO senses(
@@ -117,7 +129,8 @@ def main():
         """,(vid,lvl,df.get("pos_group"),df.get("pos_zh"),
              df.get("reading_length"),df.get("mora_bucket"),df.get("script_type"),
              int(df.get("has_kanji",0)),df.get("first_char"),df.get("last_char"),
-             df.get("meaning_keywords"),df.get("sense_count",0),df.get("common_score",0)))
+             df.get("meaning_keywords") or extract_meaning_keywords(row_meanings_zh),
+             df.get("sense_count",0),df.get("common_score",0)))
 
     for vid,word,reading in con.execute("SELECT id,word,reading FROM vocabulary"):
         zh_text=" ".join(x[0] for x in con.execute(
