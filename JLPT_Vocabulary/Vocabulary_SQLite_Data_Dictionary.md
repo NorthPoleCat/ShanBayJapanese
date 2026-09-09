@@ -106,7 +106,7 @@ metadata：数据库版本、构建时间和统计信息
 | `id` | 例句主键。 |
 | `vocabulary_id` | 例句所属目标词。 |
 | `sense_id` | 自动判断出的具体义项；证据不足时为 `NULL`，删除义项后也会置空。 |
-| `sentence_ja` / `sentence_en` / `sentence_zh` | 日文、英文和中文句子；当前流水线写入日文与英文，中文通常为空。 |
+| `sentence_ja` / `sentence_en` / `sentence_zh` | 日文、英文和中文句子。中文由 DeepSeek 根据日文原句与英文译文共同生成；重复例句只翻译一次，再回填所有记录。 |
 | `source` | 例句来源，当前为 `OpenJLPT`。 |
 | `source_external_id` | 来源侧 ID；当前构建流程尚未写入。 |
 | `difficulty` | 预留的例句难度；当前构建流程尚未写入。 |
@@ -147,6 +147,7 @@ metadata：数据库版本、构建时间和统计信息
 - `built_at`：UTC ISO 8601 构建时间。
 - `word_count`：词条数。
 - `sense_count`：义项数。
+- `example_zh_count`：已有中文翻译的例句记录数。
 - `example_bound_count`：成功绑定具体义项的例句数。
 
 ## `vocabulary_fts`：FTS5 搜索索引
@@ -164,6 +165,7 @@ metadata：数据库版本、构建时间和统计信息
 | JMdict 已匹配 / 未匹配 | 8,199 / 135 |
 | 义项 | 17,750 |
 | 例句 | 14,362 |
+| 中文例句 | 14,362 / 14,362（12,196 条唯一例句经 DeepSeek `deepseek-chat` 生成） |
 | 已绑定具体义项的例句 | 3,214 |
 | 中文义项 | 17,750 / 17,750（DeepSeek `deepseek-chat` 生成，待人工抽检） |
 

@@ -13,6 +13,7 @@ def main():
     total=con.execute("SELECT COUNT(*) FROM vocabulary").fetchone()[0]
     senses=con.execute("SELECT COUNT(*) FROM senses").fetchone()[0]
     examples=con.execute("SELECT COUNT(*) FROM examples").fetchone()[0]
+    examples_zh=con.execute("SELECT COUNT(*) FROM examples WHERE sentence_zh IS NOT NULL AND trim(sentence_zh)<>''").fetchone()[0]
     bound=con.execute("SELECT COUNT(*) FROM examples WHERE sense_id IS NOT NULL").fetchone()[0]
     poszh=con.execute("SELECT COUNT(*) FROM vocabulary WHERE pos_zh IS NOT NULL AND trim(pos_zh)<>''").fetchone()[0]
     distract=con.execute("SELECT COUNT(*) FROM distractor_features").fetchone()[0]
@@ -22,6 +23,7 @@ def main():
     print(f"Vocabulary: {total:,}")
     print(f"Senses: {senses:,}")
     print(f"Examples: {examples:,}")
+    print(f"Chinese example coverage: {examples_zh:,}/{examples:,}")
     print(f"Examples bound to sense: {bound:,}/{examples:,}")
     print(f"POS Chinese coverage: {poszh:,}/{total:,}")
     print(f"Distractor feature rows: {distract:,}/{total:,}")
@@ -55,6 +57,8 @@ def main():
     if poszh != total or distract != total:
         ok=False
     if empty_word or no_sense or integrity!="ok" or fk:
+        ok=False
+    if examples_zh != examples:
         ok=False
     con.close()
     if not ok: raise SystemExit(1)

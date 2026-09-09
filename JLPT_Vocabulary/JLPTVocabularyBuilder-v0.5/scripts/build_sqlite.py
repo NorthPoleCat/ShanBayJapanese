@@ -14,6 +14,16 @@ def load_sense_zh(path):
             result[(str(r["source_seq"]),int(r["sense_index"]))]=r
     return result
 
+def load_example_zh(path):
+    p=Path(path)
+    result={}
+    if not p.exists(): return result
+    with p.open("r",encoding="utf-8-sig",newline="") as f:
+        for r in csv.DictReader(f):
+            key=((r.get("sentence_ja") or "").strip(),(r.get("sentence_en") or "").strip())
+            result[key]=(r.get("sentence_zh") or "").strip()
+    return result
+
 def extract_meaning_keywords(meanings):
     parts = re.split(r"[；，、,/（）()：:\s]+", "；".join(meanings))
     seen = []
@@ -27,12 +37,14 @@ def main():
     p=argparse.ArgumentParser()
     p.add_argument("--input",default=str(ROOT/"data/intermediate/enriched_words.json"))
     p.add_argument("--zh-senses",default=str(ROOT/"data/intermediate/zh_senses.csv"))
+    p.add_argument("--zh-examples",default=str(ROOT/"data/intermediate/zh_examples.csv"))
     p.add_argument("--schema",default=str(ROOT/"schema/vocabulary.sql"))
     p.add_argument("--output",default=str(ROOT/"data/output/vocabulary.sqlite"))
     args=p.parse_args()
 
     data=json.loads(Path(args.input).read_text(encoding="utf-8"))
     zh=load_sense_zh(args.zh_senses)
+    example_zh=load_example_zh(args.zh_examples)
 
     out=Path(args.output); out.parent.mkdir(parents=True,exist_ok=True)
     if out.exists(): out.unlink()
@@ -108,15 +120,16 @@ def main():
         for ex in row.get("examples",[])[:3]:
             ja=(ex.get("ja") or "").strip()
             en=(ex.get("en") or "").strip()
+            zh_sentence=example_zh.get((ja,en)) or None
             if not ja: continue
             sidx=ex.get("sense_index")
             sid2=sense_id_map.get((vid,int(sidx))) if sidx is not None else None
             con.execute("""
               INSERT INTO examples(
-                vocabulary_id,sense_id,sentence_ja,sentence_en,source,
+                vocabulary_id,sense_id,sentence_ja,sentence_zh,sentence_en,source,
                 sense_match_method,sense_match_score
-              ) VALUES(?,?,?,?,?,?,?)
-            """,(vid,sid2,ja,en or None,"OpenJLPT",
+              ) VALUES(?,?,?,?,?,?,?,?)
+            """,(vid,sid2,ja,zh_sentence,en or None,"OpenJLPT",
                  ex.get("sense_match_method"),ex.get("sense_match_score")))
 
         df=row.get("distractor_features") or {}
@@ -146,6 +159,7 @@ def main():
         "built_at":now,
         "word_count":str(con.execute("SELECT COUNT(*) FROM vocabulary").fetchone()[0]),
         "sense_count":str(con.execute("SELECT COUNT(*) FROM senses").fetchone()[0]),
+        "example_zh_count":str(con.execute("SELECT COUNT(*) FROM examples WHERE sentence_zh IS NOT NULL AND trim(sentence_zh)<>''").fetchone()[0]),
         "example_bound_count":str(con.execute("SELECT COUNT(*) FROM examples WHERE sense_id IS NOT NULL").fetchone()[0])
     }
     con.executemany("INSERT INTO metadata(key,value) VALUES(?,?)",meta.items())

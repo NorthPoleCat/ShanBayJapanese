@@ -1,7 +1,8 @@
 PYTHON ?= python3
 
-.PHONY: all download normalize jmdict match refine sense-template enrich \
+.PHONY: all download normalize jmdict match refine sense-template example-template enrich \
         translate-senses-openai translate-senses-deepseek audit-senses \
+        translate-examples-openai translate-examples-deepseek audit-examples \
         db validate build sample clean
 
 all: build
@@ -24,14 +25,26 @@ refine:
 sense-template:
 	$(PYTHON) scripts/export_sense_zh_template.py
 
+example-template:
+	$(PYTHON) scripts/export_example_zh_template.py
+
 translate-senses-openai:
 	$(PYTHON) scripts/translate_senses_zh.py --provider openai --model $${OPENAI_MODEL}
 
 translate-senses-deepseek:
 	$(PYTHON) scripts/translate_senses_zh.py --provider deepseek --model $${DEEPSEEK_MODEL}
 
+translate-examples-openai:
+	$(PYTHON) scripts/translate_examples_zh.py --provider openai --model $${OPENAI_MODEL}
+
+translate-examples-deepseek:
+	$(PYTHON) scripts/translate_examples_zh.py --provider deepseek --model $${DEEPSEEK_MODEL}
+
 audit-senses:
 	$(PYTHON) scripts/audit_senses.py
+
+audit-examples:
+	$(PYTHON) scripts/audit_examples_zh.py
 
 enrich:
 	$(PYTHON) scripts/enrich_learning_data.py
