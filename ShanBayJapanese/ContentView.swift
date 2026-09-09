@@ -124,13 +124,18 @@ private struct VocabularyDetailView: View {
                     }
                     .padding(.bottom, 10)
 
-                    HStack(spacing: 8) {
-                        if !item.partOfSpeech.isEmpty {
-                            detailTag(item.partOfSpeech, color: partOfSpeechColor)
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(spacing: 8) {
+                            ForEach(Array(item.partOfSpeechLabels.enumerated()), id: \.offset) { index, label in
+                                detailTag(label, color: partOfSpeechTagColor(at: index))
+                            }
                         }
-                        detailTag("JLPT N\(item.level)", color: themeColor)
-                        if item.isCommon {
-                            detailTag("常用", color: .orange, systemImage: "star.fill")
+
+                        HStack(spacing: 8) {
+                            detailTag("JLPT N\(item.level)", color: themeColor)
+                            if item.isCommon {
+                                detailTag("常用", color: .orange, systemImage: "star.fill")
+                            }
                         }
                     }
 
@@ -355,6 +360,13 @@ private struct VocabularyDetailView: View {
         }
     }
 
+    private func partOfSpeechTagColor(at index: Int) -> Color {
+        if item.posGroup == "verb" && index == 1 {
+            return Color(red: 0.2, green: 0.4, blue: 0.8)
+        }
+        return partOfSpeechColor
+    }
+
     private func playAudio() {
         let target = item.word.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !target.isEmpty else { return }
@@ -410,8 +422,8 @@ private struct VocabularyRow: View {
             }
 
             HStack(spacing: 8) {
-                if !item.partOfSpeech.isEmpty {
-                    Text(item.partOfSpeech)
+                if !item.partOfSpeechLabels.isEmpty {
+                    Text(item.partOfSpeechLabels.joined(separator: " · "))
                 }
                 if item.isCommon {
                     Label("常用", systemImage: "star.fill")

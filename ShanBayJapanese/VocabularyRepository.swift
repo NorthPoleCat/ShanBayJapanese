@@ -10,9 +10,45 @@ struct VocabularyItem: Identifiable, Hashable {
     let posGroup: String
     let partOfSpeech: String
     let verbClass: String
+    let transitivity: String
     let adjectiveClass: String
     let isCommon: Bool
     let meanings: String
+
+    var conjugationTypeLabel: String? {
+        guard posGroup == "verb" else { return nil }
+        let sourcePOS = primaryPartOfSpeech.lowercased()
+        if word.hasSuffix("する") || sourcePOS.hasPrefix("suru verb") {
+            return "サ变动词"
+        }
+        if sourcePOS.contains("kuru verb") {
+            return "カ变动词"
+        }
+        switch verbClass {
+        case "godan": return "五段动词"
+        case "ichidan": return "一段动词"
+        case "irregular": return "不规则动词"
+        default: return nil
+        }
+    }
+
+    var transitivityLabel: String? {
+        guard posGroup == "verb" else { return nil }
+        switch transitivity {
+        case "transitive": return "他动词"
+        case "intransitive": return "自动词"
+        case "both": return "自动词・他动词"
+        default: return nil
+        }
+    }
+
+    var partOfSpeechLabels: [String] {
+        if posGroup == "verb" {
+            let labels = [conjugationTypeLabel, transitivityLabel].compactMap { $0 }
+            return labels.isEmpty ? ["动词"] : labels
+        }
+        return partOfSpeech.isEmpty ? [] : [partOfSpeech]
+    }
 }
 
 struct VocabularySense: Identifiable {
@@ -85,6 +121,7 @@ final class VocabularyRepository {
             COALESCE(v.pos_group, ''),
             COALESCE(v.pos_zh, v.pos_group, ''),
             COALESCE(v.verb_class, ''),
+            COALESCE(v.transitivity, ''),
             COALESCE(v.adjective_class, ''),
             v.is_common,
             COALESCE(
@@ -144,9 +181,10 @@ final class VocabularyRepository {
                 posGroup: string(at: 5, in: statement),
                 partOfSpeech: string(at: 6, in: statement),
                 verbClass: string(at: 7, in: statement),
-                adjectiveClass: string(at: 8, in: statement),
-                isCommon: sqlite3_column_int(statement, 9) == 1,
-                meanings: string(at: 10, in: statement)
+                transitivity: string(at: 8, in: statement),
+                adjectiveClass: string(at: 9, in: statement),
+                isCommon: sqlite3_column_int(statement, 10) == 1,
+                meanings: string(at: 11, in: statement)
             ))
         }
 
