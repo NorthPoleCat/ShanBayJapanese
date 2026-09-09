@@ -93,7 +93,8 @@ private struct VocabularyDetailView: View {
     @State private var senses: [VocabularySense] = []
     @State private var examples: [VocabularyExample] = []
     @State private var errorMessage: String?
-    @State private var isConjugationsExpanded = false
+    @State private var isMeaningsExpanded = true
+    @State private var isConjugationsExpanded = true
     @State private var speechSynthesizer = AVSpeechSynthesizer()
 
     private var conjugations: [ConjugationForm] {
@@ -123,18 +124,20 @@ private struct VocabularyDetailView: View {
                     }
                     .padding(.bottom, 10)
 
-                    meaningsView
-
                     HStack(spacing: 8) {
-                        detailTag("JLPT N\(item.level)", color: themeColor)
                         if !item.partOfSpeech.isEmpty {
                             detailTag(item.partOfSpeech, color: partOfSpeechColor)
                         }
+                        detailTag("JLPT N\(item.level)", color: themeColor)
                         if item.isCommon {
                             detailTag("常用", color: .orange, systemImage: "star.fill")
                         }
                     }
-                    .padding(.top, 14)
+
+                    Divider()
+                        .padding(.vertical, 16)
+
+                    meaningsView
 
                     Divider()
                         .padding(.vertical, 16)
@@ -199,54 +202,50 @@ private struct VocabularyDetailView: View {
 
     @ViewBuilder
     private var meaningsView: some View {
-        if senses.isEmpty {
-            Text("暂无释义")
-                .foregroundStyle(.secondary)
-        } else {
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(senses) { sense in
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(alignment: .firstTextBaseline, spacing: 6) {
-                            if senses.count > 1 {
-                                Text("\(sense.index + 1).")
-                                    .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 10) {
+            collapsibleHeader(
+                title: "释义",
+                detail: senses.isEmpty ? nil : "\(senses.count)项",
+                isExpanded: $isMeaningsExpanded
+            )
+
+            if isMeaningsExpanded {
+                Group {
+                    if senses.isEmpty {
+                        Text("暂无释义")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(senses) { sense in
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                                    if senses.count > 1 {
+                                        Text("\(sense.index + 1).")
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    Text(sense.meaningChinese.isEmpty ? sense.meaningEnglish : sense.meaningChinese)
+                                }
+                                if !sense.meaningChinese.isEmpty && !sense.meaningEnglish.isEmpty {
+                                    Text(sense.meaningEnglish)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                        .padding(.leading, senses.count > 1 ? 20 : 0)
+                                }
                             }
-                            Text(sense.meaningChinese.isEmpty ? sense.meaningEnglish : sense.meaningChinese)
-                        }
-                        if !sense.meaningChinese.isEmpty && !sense.meaningEnglish.isEmpty {
-                            Text(sense.meaningEnglish)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .padding(.leading, senses.count > 1 ? 20 : 0)
                         }
                     }
                 }
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
     }
 
     private var conjugationsView: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    isConjugationsExpanded.toggle()
-                }
-            } label: {
-                HStack {
-                    Text("变形")
-                        .font(.headline)
-                        .foregroundStyle(themeColor)
-                    Spacer()
-                    Text("\(conjugations.count)种")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Image(systemName: isConjugationsExpanded ? "chevron.up" : "chevron.down")
-                        .font(.caption.bold())
-                        .foregroundStyle(themeColor)
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
+            collapsibleHeader(
+                title: "变形",
+                detail: "\(conjugations.count)种",
+                isExpanded: $isConjugationsExpanded
+            )
 
             if isConjugationsExpanded {
                 ForEach(conjugations) { form in
@@ -267,6 +266,35 @@ private struct VocabularyDetailView: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
+    }
+
+    private func collapsibleHeader(
+        title: String,
+        detail: String?,
+        isExpanded: Binding<Bool>
+    ) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isExpanded.wrappedValue.toggle()
+            }
+        } label: {
+            HStack {
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(themeColor)
+                Spacer()
+                if let detail {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Image(systemName: isExpanded.wrappedValue ? "chevron.up" : "chevron.down")
+                    .font(.caption.bold())
+                    .foregroundStyle(themeColor)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     @ViewBuilder
