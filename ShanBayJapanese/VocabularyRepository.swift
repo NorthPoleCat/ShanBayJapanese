@@ -6,7 +6,11 @@ struct VocabularyItem: Identifiable, Hashable {
     let word: String
     let reading: String
     let level: Int
+    let primaryPartOfSpeech: String
+    let posGroup: String
     let partOfSpeech: String
+    let verbClass: String
+    let adjectiveClass: String
     let isCommon: Bool
     let meanings: String
 }
@@ -77,7 +81,11 @@ final class VocabularyRepository {
             v.word,
             v.reading,
             v.jlpt_level,
+            COALESCE(v.primary_pos, ''),
+            COALESCE(v.pos_group, ''),
             COALESCE(v.pos_zh, v.pos_group, ''),
+            COALESCE(v.verb_class, ''),
+            COALESCE(v.adjective_class, ''),
             v.is_common,
             COALESCE(
                 NULLIF(GROUP_CONCAT(NULLIF(s.meaning_zh, ''), '；'), ''),
@@ -132,9 +140,13 @@ final class VocabularyRepository {
                 word: string(at: 1, in: statement),
                 reading: string(at: 2, in: statement),
                 level: Int(sqlite3_column_int(statement, 3)),
-                partOfSpeech: string(at: 4, in: statement),
-                isCommon: sqlite3_column_int(statement, 5) == 1,
-                meanings: string(at: 6, in: statement)
+                primaryPartOfSpeech: string(at: 4, in: statement),
+                posGroup: string(at: 5, in: statement),
+                partOfSpeech: string(at: 6, in: statement),
+                verbClass: string(at: 7, in: statement),
+                adjectiveClass: string(at: 8, in: statement),
+                isCommon: sqlite3_column_int(statement, 9) == 1,
+                meanings: string(at: 10, in: statement)
             ))
         }
 

@@ -89,6 +89,11 @@ private struct VocabularyDetailView: View {
     @State private var senses: [VocabularySense] = []
     @State private var examples: [VocabularyExample] = []
     @State private var errorMessage: String?
+    @State private var isConjugationsExpanded = false
+
+    private var conjugations: [ConjugationForm] {
+        JapaneseConjugator.forms(for: item)
+    }
 
     var body: some View {
         List {
@@ -141,6 +146,40 @@ private struct VocabularyDetailView: View {
                         }
                         .padding(.vertical, 3)
                     }
+                }
+            }
+
+            if !conjugations.isEmpty {
+                Section {
+                    if isConjugationsExpanded {
+                        ForEach(conjugations) { form in
+                            HStack(alignment: .firstTextBaseline) {
+                                Text(form.name)
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Text(form.value)
+                                    .font(.body.weight(.medium))
+                                    .textSelection(.enabled)
+                            }
+                        }
+                    }
+                } header: {
+                    Button {
+                        withAnimation {
+                            isConjugationsExpanded.toggle()
+                        }
+                    } label: {
+                        HStack {
+                            Text("变形")
+                            Spacer()
+                            Text("\(conjugations.count)种")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Image(systemName: isConjugationsExpanded ? "chevron.up" : "chevron.down")
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
             }
 
