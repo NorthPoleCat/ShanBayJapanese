@@ -66,6 +66,13 @@ struct VocabularyExample: Identifiable {
     let sentenceEnglish: String
 }
 
+struct VocabularySpelling: Identifiable {
+    let id: Int64
+    let spelling: String
+    let type: String
+    let isPrimary: Bool
+}
+
 enum VocabularyDatabaseError: LocalizedError {
     case resourceMissing
     case openFailed(String)
@@ -114,7 +121,11 @@ final class VocabularyRepository {
         let sql = """
         SELECT
             v.id,
-            v.word,
+            COALESCE(
+                (SELECT spelling FROM vocabulary_spellings
+                 WHERE vocabulary_id = v.id AND is_primary = 1 LIMIT 1),
+                v.word
+            ) AS display_word,
             v.reading,
             v.jlpt_level,
             COALESCE(v.primary_pos, ''),
@@ -137,6 +148,11 @@ final class VocabularyRepository {
               OR v.word LIKE ?3 ESCAPE '\\'
               OR v.reading LIKE ?3 ESCAPE '\\'
               OR EXISTS (
+                  SELECT 1 FROM vocabulary_spellings matched_spelling
+                  WHERE matched_spelling.vocabulary_id = v.id
+                    AND matched_spelling.spelling LIKE ?3 ESCAPE '\\'
+              )
+              OR EXISTS (
                   SELECT 1 FROM senses matched_sense
                   WHERE matched_sense.vocabulary_id = v.id
                     AND (
@@ -147,7 +163,13 @@ final class VocabularyRepository {
           )
         GROUP BY v.id
         ORDER BY
-            CASE WHEN ?2 <> '' AND (v.word = ?2 OR v.reading = ?2) THEN 0 ELSE 1 END,
+            CASE WHEN ?2 <> '' AND (
+                v.word = ?2 OR v.reading = ?2 OR EXISTS (
+                    SELECT 1 FROM vocabulary_spellings exact_spelling
+                    WHERE exact_spelling.vocabulary_id = v.id
+                      AND exact_spelling.spelling = ?2
+                )
+            ) THEN 0 ELSE 1 END,
             v.is_common DESC,
             v.common_score DESC,
             v.jlpt_level DESC,
@@ -244,6 +266,32 @@ final class VocabularyRepository {
                 sentenceJapanese: string(at: 1, in: statement),
                 sentenceChinese: string(at: 2, in: statement),
                 sentenceEnglish: string(at: 3, in: statement)
+            ))
+        }
+        return result
+    }
+
+    func spellings(for vocabularyID: Int64) throws -> [VocabularySpelling] {
+        let sql = """
+        SELECT id, spelling, spelling_type, is_primary
+        FROM vocabulary_spellings
+        WHERE vocabulary_id = ?1
+        ORDER BY is_primary DESC, priority_score DESC, spelling_type, spelling
+        """
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(database, sql, -1, &statement, nil) == SQLITE_OK else {
+            throw VocabularyDatabaseError.queryFailed(lastError)
+        }
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_int64(statement, 1, vocabularyID)
+
+        var result: [VocabularySpelling] = []
+        while sqlite3_step(statement) == SQLITE_ROW {
+            result.append(VocabularySpelling(
+                id: sqlite3_column_int64(statement, 0),
+                spelling: string(at: 1, in: statement),
+                type: string(at: 2, in: statement),
+                isPrimary: sqlite3_column_int(statement, 3) == 1
             ))
         }
         return result

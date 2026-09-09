@@ -92,6 +92,7 @@ private struct VocabularyDetailView: View {
 
     @State private var senses: [VocabularySense] = []
     @State private var examples: [VocabularyExample] = []
+    @State private var spellings: [VocabularySpelling] = []
     @State private var errorMessage: String?
     @State private var isMeaningsExpanded = true
     @State private var isConjugationsExpanded = true
@@ -99,6 +100,14 @@ private struct VocabularyDetailView: View {
 
     private var conjugations: [ConjugationForm] {
         JapaneseConjugator.forms(for: item)
+    }
+
+    private var kanjiSpellings: [String] {
+        Array(spellings.filter { $0.type == "kanji" || $0.type == "mixed" }.prefix(1)).map(\.spelling)
+    }
+
+    private var kanaSpellings: [String] {
+        spellings.filter { $0.type == "kana" }.map(\.spelling)
     }
 
     private var themeColor: Color {
@@ -123,6 +132,17 @@ private struct VocabularyDetailView: View {
                         }
                     }
                     .padding(.bottom, 10)
+
+                    if !kanjiSpellings.isEmpty {
+                        VStack(alignment: .leading, spacing: 6) {
+                            spellingRow(label: "汉字", values: kanjiSpellings)
+                            spellingRow(
+                                label: "假名",
+                                values: kanaSpellings.isEmpty ? [item.reading] : kanaSpellings
+                            )
+                        }
+                        .padding(.bottom, 12)
+                    }
 
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(spacing: 8) {
@@ -352,6 +372,18 @@ private struct VocabularyDetailView: View {
         .background(color, in: RoundedRectangle(cornerRadius: 5))
     }
 
+    private func spellingRow(label: String, values: [String]) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(label)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 34, alignment: .leading)
+            Text(values.filter { !$0.isEmpty }.joined(separator: "、"))
+                .font(.subheadline)
+                .textSelection(.enabled)
+        }
+    }
+
     private var partOfSpeechColor: Color {
         switch item.posGroup {
         case "verb": Color(red: 0.91, green: 0.42, blue: 0.54)
@@ -382,6 +414,7 @@ private struct VocabularyDetailView: View {
         do {
             senses = try repository.senses(for: item.id)
             examples = try repository.examples(for: item.id)
+            spellings = try repository.spellings(for: item.id)
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription

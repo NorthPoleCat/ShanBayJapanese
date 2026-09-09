@@ -5,6 +5,67 @@ import argparse, csv, json, re, sqlite3
 
 ROOT=Path(__file__).resolve().parents[1]
 
+PRIORITY_WEIGHTS = {
+    "ichi1": 100, "news1": 90, "spec1": 80, "gai1": 70,
+    "ichi2": 50, "news2": 40, "spec2": 30, "gai2": 20,
+}
+
+def priority_score(tags):
+    score = 0
+    for tag in filter(None, (tags or "").split(",")):
+        score += PRIORITY_WEIGHTS.get(tag, 0)
+        if tag.startswith("nf") and tag[2:].isdigit():
+            score += max(1, 51-int(tag[2:]))
+    return score
+
+def spelling_type(value):
+    has_kanji = bool(re.search(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]", value))
+    has_kana = bool(re.search(r"[\u3040-\u30ff]", value))
+    if has_kanji and has_kana: return "mixed"
+    if has_kanji: return "kanji"
+    return "kana"
+
+def load_spellings(index, row):
+    source_word=(row.get("word") or "").strip()
+    source_reading=(row.get("reading") or "").strip()
+    candidates={}
+
+    def add(value, kind=None, tags=""):
+        value=(value or "").strip()
+        if not value: return
+        current=candidates.get(value)
+        new_tags=",".join(dict.fromkeys(filter(None,(tags or "").split(","))))
+        new_score=priority_score(new_tags)
+        if current is None or new_score > current[2]:
+            candidates[value]=(kind or spelling_type(value),new_tags,new_score)
+
+    entry_id=row.get("jmdict_entry_id")
+    if index is not None and entry_id:
+        for value,tags in index.execute("SELECT keb, COALESCE(priority,'') FROM kanji WHERE ent_seq=?",(entry_id,)):
+            add(value,"kanji" if spelling_type(value)=="kanji" else "mixed",tags)
+        for value,tags in index.execute("SELECT reb, COALESCE(priority,'') FROM reading WHERE ent_seq=?",(entry_id,)):
+            add(value,"kana",tags)
+    add(source_word)
+    add(source_reading,"kana")
+
+    # JMdict's ke_pri tags describe preferred written forms. Use the strongest
+    # tagged kanji form; otherwise preserve the spelling supplied by OpenJLPT.
+    kanji_candidates=[(value,*details) for value,details in candidates.items()
+                      if details[0] in ("kanji","mixed") and details[2] > 0]
+    if kanji_candidates:
+        primary=max(kanji_candidates,key=lambda item:(item[3],item[0]==source_word,-len(item[0])))[0]
+    elif source_word in candidates:
+        primary=source_word
+    elif candidates:
+        primary=next(iter(candidates))
+    else:
+        return []
+
+    return sorted(
+        [(value,kind,tags,score,int(value==primary)) for value,(kind,tags,score) in candidates.items()],
+        key=lambda item:(-item[4],-item[3],item[1]=="kana",item[0])
+    )
+
 def load_sense_zh(path):
     p=Path(path)
     result={}
@@ -38,6 +99,7 @@ def main():
     p.add_argument("--input",default=str(ROOT/"data/intermediate/enriched_words.json"))
     p.add_argument("--zh-senses",default=str(ROOT/"data/intermediate/zh_senses.csv"))
     p.add_argument("--zh-examples",default=str(ROOT/"data/intermediate/zh_examples.csv"))
+    p.add_argument("--jmdict-index",default=str(ROOT/"data/intermediate/jmdict_index.sqlite"))
     p.add_argument("--schema",default=str(ROOT/"schema/vocabulary.sql"))
     p.add_argument("--output",default=str(ROOT/"data/output/vocabulary.sqlite"))
     args=p.parse_args()
@@ -45,6 +107,8 @@ def main():
     data=json.loads(Path(args.input).read_text(encoding="utf-8"))
     zh=load_sense_zh(args.zh_senses)
     example_zh=load_example_zh(args.zh_examples)
+    index_path=Path(args.jmdict_index)
+    jmdict_index=sqlite3.connect(index_path) if index_path.exists() else None
 
     out=Path(args.output); out.parent.mkdir(parents=True,exist_ok=True)
     if out.exists(): out.unlink()
@@ -82,6 +146,13 @@ def main():
             row.get("common_rank"),row.get("match_method"),row.get("match_score"),sid
         ))
         vid=cur.lastrowid
+
+        for spelling,kind,tags,score,is_primary in load_spellings(jmdict_index,row):
+            con.execute("""
+              INSERT INTO vocabulary_spellings(
+                vocabulary_id,spelling,spelling_type,priority_tags,priority_score,is_primary
+              ) VALUES(?,?,?,?,?,?)
+            """,(vid,spelling,kind,tags or None,score,is_primary))
 
         con.execute("INSERT INTO word_list_items(word_list_id,vocabulary_id,sort_order) VALUES(?,?,?)",
                     (list_ids[lvl],vid,row.get("source_seq")))
@@ -146,24 +217,28 @@ def main():
              df.get("sense_count",0),df.get("common_score",0)))
 
     for vid,word,reading in con.execute("SELECT id,word,reading FROM vocabulary"):
+        searchable_spellings=" ".join(x[0] for x in con.execute(
+            "SELECT spelling FROM vocabulary_spellings WHERE vocabulary_id=? ORDER BY is_primary DESC, priority_score DESC",(vid,)))
         zh_text=" ".join(x[0] for x in con.execute(
             "SELECT COALESCE(meaning_zh,'') FROM senses WHERE vocabulary_id=? ORDER BY jmdict_sense_index",(vid,)))
         en_text=" ".join(x[0] for x in con.execute(
             "SELECT COALESCE(meaning_en,'') FROM senses WHERE vocabulary_id=? ORDER BY jmdict_sense_index",(vid,)))
         con.execute("INSERT INTO vocabulary_fts(vocabulary_id,word,reading,meaning_zh,meaning_en) VALUES(?,?,?,?,?)",
-                    (vid,word,reading,zh_text,en_text))
+                    (vid,searchable_spellings or word,reading,zh_text,en_text))
 
     meta={
-        "schema_version":"3",
-        "builder_version":"0.5.0",
+        "schema_version":"4",
+        "builder_version":"0.5.1",
         "built_at":now,
         "word_count":str(con.execute("SELECT COUNT(*) FROM vocabulary").fetchone()[0]),
         "sense_count":str(con.execute("SELECT COUNT(*) FROM senses").fetchone()[0]),
+        "spelling_count":str(con.execute("SELECT COUNT(*) FROM vocabulary_spellings").fetchone()[0]),
         "example_zh_count":str(con.execute("SELECT COUNT(*) FROM examples WHERE sentence_zh IS NOT NULL AND trim(sentence_zh)<>''").fetchone()[0]),
         "example_bound_count":str(con.execute("SELECT COUNT(*) FROM examples WHERE sense_id IS NOT NULL").fetchone()[0])
     }
     con.executemany("INSERT INTO metadata(key,value) VALUES(?,?)",meta.items())
     con.commit(); con.execute("VACUUM"); con.close()
+    if jmdict_index is not None: jmdict_index.close()
     print(f"SQLite -> {out}")
 
 if __name__=="__main__":

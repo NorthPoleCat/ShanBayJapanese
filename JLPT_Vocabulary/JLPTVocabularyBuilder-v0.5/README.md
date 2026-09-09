@@ -1,11 +1,12 @@
 # JLPTVocabularyBuilder v0.5
 
-v0.5 只新增四项学习数据能力：
+v0.5 提供以下学习数据能力：
 
 1. 词性中文名
 2. 常用度
 3. 例句与具体 Sense 绑定
 4. 干扰项生成依据
+5. JMdict 多表记及常见表记选择
 
 不加入动词活用、形容词活用等额外功能。
 
@@ -143,3 +144,9 @@ common_score
 ```
 
 这些字段只提供“生成依据”，最终干扰项可以在 App 运行时生成，也可以以后离线预生成。
+
+## 5. 多表记
+
+`vocabulary_spellings` 保存同一 JMdict 词条的汉字、混合书写和假名写法，以及原始 priority 标签和换算分数。每个词条恰好有一个 `is_primary = 1` 的表记：优先采用带 JMdict `ke_pri` 的最常见汉字表记，没有可靠 priority 时保留 OpenJLPT 原词形。
+
+App 列表可读取主表记，详情页可同时显示汉字和假名，并且所有表记都可参与搜索。`vocabulary.word` 仍保留 OpenJLPT 原始词形，便于追溯。

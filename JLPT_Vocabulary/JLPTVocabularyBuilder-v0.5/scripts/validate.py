@@ -17,6 +17,12 @@ def main():
     bound=con.execute("SELECT COUNT(*) FROM examples WHERE sense_id IS NOT NULL").fetchone()[0]
     poszh=con.execute("SELECT COUNT(*) FROM vocabulary WHERE pos_zh IS NOT NULL AND trim(pos_zh)<>''").fetchone()[0]
     distract=con.execute("SELECT COUNT(*) FROM distractor_features").fetchone()[0]
+    spellings=con.execute("SELECT COUNT(*) FROM vocabulary_spellings").fetchone()[0]
+    invalid_primary=con.execute("""
+      SELECT COUNT(*) FROM vocabulary v
+      WHERE (SELECT COUNT(*) FROM vocabulary_spellings s
+             WHERE s.vocabulary_id=v.id AND s.is_primary=1) <> 1
+    """).fetchone()[0]
     expected={5:662,4:632,3:1784,2:1793,1:3463}
     ok=True
 
@@ -27,6 +33,8 @@ def main():
     print(f"Examples bound to sense: {bound:,}/{examples:,}")
     print(f"POS Chinese coverage: {poszh:,}/{total:,}")
     print(f"Distractor feature rows: {distract:,}/{total:,}")
+    print(f"Alternative spelling rows: {spellings:,}")
+    print(f"Words without exactly one primary spelling: {invalid_primary}")
 
     for lvl in range(5,0,-1):
         count=con.execute("SELECT COUNT(*) FROM vocabulary WHERE jlpt_level=?",(lvl,)).fetchone()[0]
@@ -56,7 +64,7 @@ def main():
 
     if poszh != total or distract != total:
         ok=False
-    if empty_word or no_sense or integrity!="ok" or fk:
+    if empty_word or no_sense or invalid_primary or integrity!="ok" or fk:
         ok=False
     if examples_zh != examples:
         ok=False

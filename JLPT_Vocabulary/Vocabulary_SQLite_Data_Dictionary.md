@@ -1,6 +1,6 @@
 # JLPT Vocabulary v0.5 SQLite 数据字典
 
-本文档说明 `JLPTVocabularyBuilder-v0.5` 最终导出的 `vocabulary.sqlite`。当前 schema 版本为 `3`，Builder 版本为 `0.5.0`。
+本文档说明 `JLPTVocabularyBuilder-v0.5` 最终导出的 `vocabulary.sqlite`。当前 schema 版本为 `4`，Builder 版本为 `0.5.1`。
 
 ## 数据来源与处理链
 
@@ -22,6 +22,7 @@ JLPT 等级来自社区项目 OpenJLPT，不是官方公布的固定词表。JMd
 
 ```text
 sources 1 ── N vocabulary 1 ── N senses
+                         ├── N vocabulary_spellings
                          ├── N meanings
                          ├── N examples ── 0..1 senses
                          ├── 1 distractor_features
@@ -50,7 +51,7 @@ metadata：数据库版本、构建时间和统计信息
 | --- | --- |
 | `id` | App 内使用的词条主键。 |
 | `jmdict_entry_id` | 匹配到的 JMdict `ent_seq`；未匹配时为 `NULL`。它是关联词典原词条的稳定标识，不是本库主键。 |
-| `word` | 主要展示词形，可能是汉字、假名或混合书写。 |
+| `word` | OpenJLPT 原始词形，可能是汉字、假名或混合书写；列表主表记应从 `vocabulary_spellings.is_primary` 读取。 |
 | `reading` | 假名读音；优先使用 OpenJLPT，缺失时尝试 JMdict 或纯假名词形。 |
 | `jlpt_level` | 1～5，分别表示 N1～N5。数字越小等级越高。 |
 | `primary_pos` | JMdict 返回的第一个原始英文词性标签。它便于追溯，但不能代表所有义项。 |
@@ -65,6 +66,20 @@ metadata：数据库版本、构建时间和统计信息
 | `match_method` | OpenJLPT 到 JMdict 的主要匹配依据，如 `word+reading`、`word`、`kana-reading`。 |
 | `match_score` | 启发式匹配置信分，由读音、词形、英文释义重叠和常用标记加权产生；不是概率。 |
 | `source_id` | 指向 `sources`，表示词表条目的直接来源。 |
+
+## `vocabulary_spellings`：汉字、混合与假名表记
+
+一行表示词条的一种可检索表记。数据优先来自匹配的 JMdict 条目，并补入 OpenJLPT 原词形和读音。每个 `vocabulary_id` 恰好有一个主表记。
+
+| 字段 | 含义 |
+| --- | --- |
+| `id` | 表记主键。 |
+| `vocabulary_id` | 所属词条。 |
+| `spelling` | 实际书写字符串，如“曖昧”或「あいまい”。 |
+| `spelling_type` | `kanji`、`mixed` 或 `kana`。 |
+| `priority_tags` | 该 JMdict `k_ele` / `r_ele` 的原始 priority 标签。 |
+| `priority_score` | 用于比较表记优先级的 Builder 内部分数，不是语料词频。 |
+| `is_primary` | 0/1；列表页使用的首选表记。优先选择带 `ke_pri` 的高优先级汉字表记，否则保留 OpenJLPT 原词形。 |
 
 ## `senses`：按 JMdict 划分的义项
 
@@ -147,20 +162,22 @@ metadata：数据库版本、构建时间和统计信息
 - `built_at`：UTC ISO 8601 构建时间。
 - `word_count`：词条数。
 - `sense_count`：义项数。
+- `spelling_count`：表记总数。
 - `example_zh_count`：已有中文翻译的例句记录数。
 - `example_bound_count`：成功绑定具体义项的例句数。
 
 ## `vocabulary_fts`：FTS5 搜索索引
 
-字段为 `vocabulary_id`、`word`、`reading`、`meaning_zh`、`meaning_en`。每个词条一行，释义由它的全部 sense 拼接。`vocabulary_id` 为 `UNINDEXED`，其余字段用 `unicode61` 分词。
+字段为 `vocabulary_id`、`word`、`reading`、`meaning_zh`、`meaning_en`。每个词条一行；`word` 拼接该词的全部表记，释义由它的全部 sense 拼接。`vocabulary_id` 为 `UNINDEXED`，其余字段用 `unicode61` 分词。
 
 注意：`unicode61` 对英文单词搜索很有效，但对日语/中文的逐字前缀搜索能力有限；App 若要支持任意日文片段，宜用主表 `LIKE`，或以后改用适合 CJK 的 n-gram 索引。
 
-## 当前全量构建结果（2026-09-08）
+## 当前全量构建结果（2026-09-09）
 
 | 项目 | 数量 |
 | --- | ---: |
 | 词条 | 8,334 |
+| 表记 | 22,671（每个词条恰好一个主表记） |
 | N1 / N2 / N3 / N4 / N5 | 3,463 / 1,793 / 1,784 / 632 / 662 |
 | JMdict 已匹配 / 未匹配 | 8,199 / 135 |
 | 义项 | 17,750 |

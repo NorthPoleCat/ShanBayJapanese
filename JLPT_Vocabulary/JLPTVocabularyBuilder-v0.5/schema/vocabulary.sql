@@ -44,6 +44,25 @@ CREATE INDEX IF NOT EXISTS idx_vocab_pos_group ON vocabulary(pos_group);
 CREATE INDEX IF NOT EXISTS idx_vocab_common_score ON vocabulary(common_score DESC);
 CREATE INDEX IF NOT EXISTS idx_vocab_common_rank ON vocabulary(common_rank);
 
+-- A vocabulary row is a learning-list entry; one JMdict entry can have several
+-- written forms. `is_primary` is the form used in compact list views, while the
+-- remaining rows are available to search and the detail screen.
+CREATE TABLE IF NOT EXISTS vocabulary_spellings (
+    id INTEGER PRIMARY KEY,
+    vocabulary_id INTEGER NOT NULL,
+    spelling TEXT NOT NULL,
+    spelling_type TEXT NOT NULL CHECK (spelling_type IN ('kanji','kana','mixed')),
+    priority_tags TEXT,
+    priority_score INTEGER NOT NULL DEFAULT 0,
+    is_primary INTEGER NOT NULL DEFAULT 0 CHECK (is_primary IN (0,1)),
+    FOREIGN KEY (vocabulary_id) REFERENCES vocabulary(id) ON DELETE CASCADE,
+    UNIQUE(vocabulary_id, spelling)
+);
+
+CREATE INDEX IF NOT EXISTS idx_spellings_vocab ON vocabulary_spellings(vocabulary_id);
+CREATE INDEX IF NOT EXISTS idx_spellings_text ON vocabulary_spellings(spelling);
+CREATE INDEX IF NOT EXISTS idx_spellings_primary ON vocabulary_spellings(vocabulary_id, is_primary);
+
 CREATE TABLE IF NOT EXISTS senses (
     id INTEGER PRIMARY KEY,
     vocabulary_id INTEGER NOT NULL,
