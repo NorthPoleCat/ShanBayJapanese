@@ -274,19 +274,32 @@ private struct VocabularyDetailView: View {
 
             if isConjugationsExpanded {
                 ForEach(conjugations) { form in
-                    HStack(alignment: .firstTextBaseline, spacing: 12) {
-                        Text(form.name)
+                    NavigationLink {
+                        ConjugationRuleView(
+                            item: item,
+                            form: form,
+                            rule: ConjugationRuleGuide.rule(for: form, item: item)
+                        )
+                    } label: {
+                        HStack(alignment: .firstTextBaseline, spacing: 12) {
+                            HStack(spacing: 5) {
+                                Text(form.name)
+                                Image(systemName: "chevron.right")
+                                    .font(.caption2.bold())
+                            }
                             .font(.subheadline)
                             .padding(.vertical, 4)
                             .padding(.horizontal, 7)
                             .foregroundStyle(.white)
                             .background(themeColor, in: RoundedRectangle(cornerRadius: 5))
-                        Spacer()
-                        Text(form.value)
-                            .font(.body.weight(.medium))
-                            .multilineTextAlignment(.trailing)
-                            .textSelection(.enabled)
+                            Spacer()
+                            Text(form.value)
+                                .font(.body.weight(.medium))
+                                .foregroundStyle(.primary)
+                                .multilineTextAlignment(.trailing)
+                        }
                     }
+                    .buttonStyle(.plain)
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
@@ -419,6 +432,106 @@ private struct VocabularyDetailView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+}
+
+private struct ConjugationRuleView: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dismiss) private var dismiss
+
+    let item: VocabularyItem
+    let form: ConjugationForm
+    let rule: ConjugationRule
+
+    private var themeColor: Color {
+        colorScheme == .dark
+            ? Color(red: 0.4, green: 0.7, blue: 1.0)
+            : Color(red: 0.2, green: 0.6, blue: 1.0)
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button { dismiss() } label: {
+                    Image(systemName: "chevron.left")
+                        .font(.headline)
+                        .frame(width: 44, height: 44)
+                }
+                Spacer()
+                Text("变形规则")
+                    .font(.headline)
+                Spacer()
+                Color.clear.frame(width: 44, height: 44)
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 4)
+            .background(themeColor.ignoresSafeArea(edges: .top))
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(rule.title)
+                            .font(.title2.bold())
+                        Text(rule.category)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(themeColor)
+                    }
+
+                    ruleSection(title: "当前单词") {
+                        HStack(spacing: 10) {
+                            Text(item.word)
+                            Image(systemName: "arrow.right")
+                                .foregroundStyle(.secondary)
+                            Text(form.value)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(themeColor)
+                        }
+                        .font(.title3)
+                        .textSelection(.enabled)
+                    }
+
+                    ruleSection(title: "构成规则") {
+                        Text(rule.formula)
+                            .font(.body.weight(.medium))
+                    }
+
+                    ruleSection(title: "用法") {
+                        Text(rule.explanation)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    if !rule.notes.isEmpty {
+                        ruleSection(title: "注意") {
+                            VStack(alignment: .leading, spacing: 8) {
+                                ForEach(rule.notes, id: \.self) { note in
+                                    Label(note, systemImage: "exclamationmark.circle")
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(18)
+            }
+        }
+        .background(Color(uiColor: .systemBackground))
+        .toolbar(.hidden, for: .navigationBar)
+    }
+
+    private func ruleSection<Content: View>(
+        title: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.headline)
+                .foregroundStyle(themeColor)
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
     }
 }
 

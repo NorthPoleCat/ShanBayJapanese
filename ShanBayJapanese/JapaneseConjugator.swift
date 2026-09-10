@@ -7,6 +7,127 @@ struct ConjugationForm: Identifiable {
     var id: String { name }
 }
 
+struct ConjugationRule: Identifiable, Hashable {
+    let title: String
+    let category: String
+    let formula: String
+    let explanation: String
+    let notes: [String]
+
+    var id: String { "\(category)-\(title)" }
+}
+
+enum ConjugationRuleGuide {
+    static func rule(for form: ConjugationForm, item: VocabularyItem) -> ConjugationRule {
+        let category = item.conjugationTypeLabel
+            ?? (item.adjectiveClass == "i" ? "い形容词" : "な形容词")
+        let formula = formula(for: form.name, item: item)
+        return ConjugationRule(
+            title: form.name,
+            category: category,
+            formula: formula,
+            explanation: explanation(for: form.name),
+            notes: notes(for: form.name, item: item)
+        )
+    }
+
+    private static func formula(for name: String, item: VocabularyItem) -> String {
+        if item.posGroup == "adjective" {
+            let isNa = item.adjectiveClass == "na" || item.partOfSpeech.contains("な形容词")
+            if isNa {
+                switch name {
+                case "连用形": return "词干＋に"
+                case "て形": return "词干＋で"
+                case "ば形": return "词干＋であれば"
+                case "简体形": return "词干＋だ"
+                case "简体否定": return "词干＋ではない"
+                case "简体过去": return "词干＋だった"
+                case "简体过去否定": return "词干＋ではなかった"
+                default: return "在形容词词干后接相应形式"
+                }
+            }
+            switch name {
+            case "连用形": return "去掉词尾「い」＋く"
+            case "て形": return "去掉词尾「い」＋くて"
+            case "ば形": return "去掉词尾「い」＋ければ"
+            case "简体形": return "保留原形"
+            case "简体否定": return "去掉词尾「い」＋くない"
+            case "简体过去": return "去掉词尾「い」＋かった"
+            case "简体过去否定": return "去掉词尾「い」＋くなかった"
+            default: return "替换い形容词的词尾"
+            }
+        }
+
+        let stem: String
+        switch item.conjugationTypeLabel {
+        case "一段动词": stem = "去掉词尾「る」"
+        case "サ变动词": stem = "「する」按不规则形式变化"
+        case "カ变动词": stem = "「くる／来る」按不规则形式变化"
+        default: stem = "将五段动词词尾移到相应行"
+        }
+        switch name {
+        case "连用形": return "\(stem)，使用连用形"
+        case "ます形": return "连用形＋ます"
+        case "て形": return item.verbClass == "godan" ? "按词尾发生音便＋て／で" : "\(stem)＋て"
+        case "ない形": return item.verbClass == "godan" ? "词尾变为あ段＋ない（う→わ）" : "\(stem)＋ない"
+        case "た形": return item.verbClass == "godan" ? "按て形音便，将て／で换为た／だ" : "\(stem)＋た"
+        case "命令形": return item.verbClass == "godan" ? "词尾变为え段" : "\(stem)＋ろ"
+        case "意志形": return item.verbClass == "godan" ? "词尾变为お段＋う" : "\(stem)＋よう"
+        case "ば形": return item.verbClass == "godan" ? "词尾变为え段＋ば" : "\(stem)＋れば"
+        case "可能形": return item.verbClass == "godan" ? "词尾变为え段＋る" : "\(stem)＋られる"
+        case "被动形": return item.verbClass == "godan" ? "词尾变为あ段＋れる" : "\(stem)＋られる"
+        case "使役形": return item.verbClass == "godan" ? "词尾变为あ段＋せる" : "\(stem)＋させる"
+        case "使役被动形": return item.verbClass == "godan" ? "词尾变为あ段＋される" : "\(stem)＋させられる"
+        case "たり形": return "た形＋り"
+        case "たい形": return "连用形＋たい"
+        case "なければ形": return "ない形去掉「い」＋ければ"
+        default: return stem
+        }
+    }
+
+    private static func explanation(for name: String) -> String {
+        switch name {
+        case "连用形": return "连接助动词或其他表达的基础形式，ます形和たい形等都由它构成。"
+        case "ます形": return "动词的礼貌表达，用于较正式或需要礼貌的叙述。"
+        case "て形": return "用于连接动作，也用于请求、进行、许可等大量句型。"
+        case "ない形": return "表示动作或状态不发生的简体否定形式。"
+        case "た形": return "表示完成或过去，也用于经验、列举等句型。"
+        case "命令形": return "直接要求对方采取行动，语气较强，使用时需要注意场合。"
+        case "意志形": return "表示说话人的意志，也可用于提议“一起做……”。"
+        case "ば形": return "表示假定条件，相当于“如果……的话”。"
+        case "可能形": return "表示具备做某事的能力或某事有可能实现。"
+        case "被动形": return "表示主语承受他人的动作，也用于受害被动等表达。"
+        case "使役形": return "表示让、使或允许他人做某事。"
+        case "使役被动形": return "表示被迫或被要求做某事。"
+        case "たり形": return "与「たりする」搭配，列举若干代表性动作或状态。"
+        case "たい形": return "表示说话人想做某事的愿望。"
+        case "なければ形": return "表示“不……的话”，也常用于义务表达「なければならない」。"
+        case "简体形": return "用于普通体叙述，也可放在名词前修饰名词。"
+        case "简体否定": return "形容词在普通体中的现在否定形式。"
+        case "简体过去": return "形容词在普通体中的过去肯定形式。"
+        case "简体过去否定": return "形容词在普通体中的过去否定形式。"
+        default: return "这是日语活用体系中的一种连接或句法形式。"
+        }
+    }
+
+    private static func notes(for name: String, item: VocabularyItem) -> [String] {
+        var result: [String] = []
+        if item.word == "行く" && (name == "て形" || name == "た形") {
+            result.append("「行く」是特殊音便：て形为「行って」，た形为「行った」。")
+        }
+        if item.word == "ある" && (name == "ない形" || name == "なければ形") {
+            result.append("「ある」的否定使用「ない」，不是「あらない」。")
+        }
+        if (item.word == "いい" || item.word == "良い") && item.posGroup == "adjective" {
+            result.append("「いい／良い」活用时使用词干「よ」，例如「よくない」「よかった」。")
+        }
+        if name == "可能形" && item.verbClass == "ichidan" {
+            result.append("口语中也常见省略「ら」的形式，但规范形式为「られる」。")
+        }
+        return result
+    }
+}
+
 enum JapaneseConjugator {
     static func forms(for item: VocabularyItem) -> [ConjugationForm] {
         if item.posGroup == "verb" {
