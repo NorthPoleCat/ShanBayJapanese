@@ -9,72 +9,152 @@ import SwiftUI
 import AVFoundation
 
 struct ContentView: View {
-    @State private var searchText = ""
-    @State private var selectedLevel: Int? = nil
-    @State private var words: [VocabularyItem] = []
-    @State private var errorMessage: String?
-
     private let repository: VocabularyRepository?
+    private let databaseError: String?
 
     init() {
         do {
             repository = try VocabularyRepository()
+            databaseError = nil
         } catch {
             repository = nil
-            _errorMessage = State(initialValue: error.localizedDescription)
+            databaseError = error.localizedDescription
         }
     }
 
     var body: some View {
         NavigationStack {
-            Group {
-                if let errorMessage {
-                    ContentUnavailableView(
-                        "词库不可用",
-                        systemImage: "exclamationmark.triangle",
-                        description: Text(errorMessage)
-                    )
-                } else if words.isEmpty {
-                    ContentUnavailableView.search(text: searchText)
-                } else {
-                    List(words) { item in
-                        NavigationLink {
-                            VocabularyDetailView(item: item, repository: repository)
-                        } label: {
-                            VocabularyRow(item: item)
+            if let databaseError {
+                ContentUnavailableView(
+                    "词库不可用",
+                    systemImage: "exclamationmark.triangle",
+                    description: Text(databaseError)
+                )
+            } else {
+                ScrollView {
+                    LazyVGrid(
+                        columns: [GridItem(.adaptive(minimum: 150), spacing: 14)],
+                        spacing: 14
+                    ) {
+                        ForEach(VocabularyEntrance.allCases) { entrance in
+                            NavigationLink {
+                                VocabularyListView(
+                                    entrance: entrance,
+                                    repository: repository
+                                )
+                            } label: {
+                                VocabularyEntranceCard(entrance: entrance)
+                            }
+                            .buttonStyle(.plain)
                         }
                     }
-                    .listStyle(.plain)
+                    .padding(16)
                 }
+                .background(Color(uiColor: .systemGroupedBackground))
+                .navigationTitle("日语词库")
             }
-            .navigationTitle("日语词库")
-            .searchable(text: $searchText, prompt: "日文、假名或释义")
-            .onSubmit(of: .search, runSearch)
-            .onChange(of: searchText) { _, _ in runSearch() }
-            .onChange(of: selectedLevel) { _, _ in runSearch() }
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Button("全部等级") { selectedLevel = nil }
-                        Divider()
-                        ForEach((1...5).reversed(), id: \.self) { level in
-                            Button("N\(level)") { selectedLevel = level }
-                        }
+        }
+    }
+}
+
+private enum VocabularyEntrance: Int, CaseIterable, Identifiable {
+    case all = 0, n5 = 5, n4 = 4, n3 = 3, n2 = 2, n1 = 1
+
+    var id: Int { rawValue }
+    var level: Int? { self == .all ? nil : rawValue }
+    var title: String { self == .all ? "全部单词" : "N\(rawValue)" }
+
+    var subtitle: String {
+        switch self {
+        case .all: "浏览完整词库"
+        case .n5: "入门基础"
+        case .n4: "初级词汇"
+        case .n3: "中级词汇"
+        case .n2: "中高级词汇"
+        case .n1: "高级词汇"
+        }
+    }
+
+    var systemImage: String { self == .all ? "books.vertical.fill" : "character.book.closed.fill" }
+
+    var color: Color {
+        switch self {
+        case .all: .indigo
+        case .n5: .green
+        case .n4: .teal
+        case .n3: .blue
+        case .n2: .orange
+        case .n1: .red
+        }
+    }
+}
+
+private struct VocabularyEntranceCard: View {
+    let entrance: VocabularyEntrance
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Image(systemName: entrance.systemImage)
+                .font(.title2)
+                .foregroundStyle(entrance.color)
+                .frame(width: 42, height: 42)
+                .background(entrance.color.opacity(0.12), in: RoundedRectangle(cornerRadius: 11))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(entrance.title)
+                    .font(.headline)
+                Text(entrance.subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 118, alignment: .leading)
+        .padding(16)
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+    }
+}
+
+private struct VocabularyListView: View {
+    let entrance: VocabularyEntrance
+    let repository: VocabularyRepository?
+
+    @State private var searchText = ""
+    @State private var words: [VocabularyItem] = []
+    @State private var errorMessage: String?
+
+    var body: some View {
+        Group {
+            if let errorMessage {
+                ContentUnavailableView(
+                    "查询失败",
+                    systemImage: "exclamationmark.triangle",
+                    description: Text(errorMessage)
+                )
+            } else if words.isEmpty {
+                ContentUnavailableView.search(text: searchText)
+            } else {
+                List(words) { item in
+                    NavigationLink {
+                        VocabularyDetailView(item: item, repository: repository)
                     } label: {
-                        Label(selectedLevel.map { "N\($0)" } ?? "全部", systemImage: "line.3.horizontal.decrease.circle")
+                        VocabularyRow(item: item)
                     }
                 }
+                .listStyle(.plain)
             }
         }
-        .task {
-            runSearch()
-        }
+        .navigationTitle(entrance.title)
+        .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $searchText, prompt: "日文、假名或释义")
+        .onSubmit(of: .search, runSearch)
+        .onChange(of: searchText) { _, _ in runSearch() }
+        .task { runSearch() }
     }
 
     private func runSearch() {
         guard let repository else { return }
         do {
-            words = try repository.search(text: searchText, level: selectedLevel)
+            words = try repository.search(text: searchText, level: entrance.level, limit: 10_000)
             errorMessage = nil
         } catch {
             words = []
